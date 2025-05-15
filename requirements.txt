@@ -1,4 +1,7 @@
 streamlit
 pandas
 plotly
+python-binance
+pytz
 streamlit-autorefresh
+streamlit-option-menu

@@ -11,7 +11,7 @@
 # # Parámetros
 # symbol = "BTCUSDT"
 # interval = Client.KLINE_INTERVAL_1MINUTE
-# start_days_ago = 30
+# start_days_ago = 370
 # limit = 1000  # máximo permitido por Binance
 
 # # Inicializar cliente
@@ -69,6 +69,16 @@
 # # Guardar CSV
 # df.to_csv("btc_sample.csv", index=False)
 # print("✅ Archivo btc_sample.csv generado con datos de 1 minuto x 30 días")
+
+
+
+
+
+
+
+
+
+
 
 import os
 import time
