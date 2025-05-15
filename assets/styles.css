@@ -1,10 +1,19 @@
-/* assets/styles.css */
-
+/* Importar fuentes */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap');
 
+/* General */
 html, body, [class*="css"] {
   font-family: 'Poppins', sans-serif !important;
   background: linear-gradient(135deg, #0A0E1A, #111827) !important;
+  color: #C9D1D9;
+}
+
+/* Encabezados */
+h1, h2, h3, h4, h5, h6 {
+  color: #00E5FF;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  text-align: center;
 }
 
 /* KPI cards hover y centrado */
@@ -56,4 +65,47 @@ div.row-widget.stDateInput input {
 /* Espaciado general */
 .main .block-container {
   padding: 2rem !important;
+}
+
+/* Botones de radio personalizados */
+.stRadio > div {
+  display: flex;
+  justify-content: space-around;
+}
+
+.stRadio > div > label {
+  background-color: #1F2937;
+  color: #C9D1D9;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.stRadio > div > label:hover {
+  background-color: #00E5FF;
+  color: #0A0E1A;
+}
+
+.stRadio > div > label[data-selected="true"] {
+  background-color: #00E5FF;
+  color: #0A0E1A;
+  border: 1px solid #00E5FF;
+}
+
+/* Gráfico */
+.plotly-graph-div {
+  border-radius: 10px;
+  background-color: #1E1E1E;
+  padding: 1rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Footer */
+footer {
+  text-align: center;
+  font-size: 12px;
+  color: gray;
+  margin-top: 1rem;
 }

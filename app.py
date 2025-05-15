@@ -9,7 +9,7 @@ from streamlit_option_menu import option_menu
 import pytz
 
 # ------------------------------------------------
-# 1. Configuración inicial (debe ir justo después de imports)
+# 1. Configuración inicial
 # ------------------------------------------------
 st.set_page_config(page_title="BTC Dashboard", layout="wide")
 
@@ -17,7 +17,10 @@ st.set_page_config(page_title="BTC Dashboard", layout="wide")
 # 2. Inyectar CSS externo
 # ------------------------------------------------
 css_path = pathlib.Path("assets/styles.css")
-st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
+if css_path.exists():
+    st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
+else:
+    st.warning("El archivo de estilos CSS no se encontró. Verifica la ruta.")
 
 # ------------------------------------------------
 # 3. Auto‐refresh y timezone
@@ -30,22 +33,71 @@ TZ = pytz.timezone("America/Argentina/Buenos_Aires")
 # ------------------------------------------------
 @st.cache_data(ttl=300)
 def load_data(path="btc_sample.csv"):
-    df = pd.read_csv(path, parse_dates=["Open Time"])
-    df["Open Time"] = pd.to_datetime(df["Open Time"], utc=True).dt.tz_convert(TZ)
-    return df.sort_values("Open Time").reset_index(drop=True)
+    try:
+        df = pd.read_csv(path, parse_dates=["Open Time"])
+        df["Open Time"] = pd.to_datetime(df["Open Time"], utc=True).dt.tz_convert(TZ)
+        return df.sort_values("Open Time").reset_index(drop=True)
+    except FileNotFoundError:
+        st.error(f"El archivo {path} no se encontró. Verifica la ruta.")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Error al cargar los datos: {e}")
+        return pd.DataFrame()
 
 df = load_data()
-last_time  = df["Open Time"].iloc[-1]
+if df.empty:
+    st.stop()
+
+last_time = df["Open Time"].iloc[-1]
 last_close = df["Close"].iloc[-1]
 
 # ------------------------------------------------
-# 5. Menú hamburguesa en header
+# 5. Inicializar valores en st.session_state
+# ------------------------------------------------
+if "selected_range" not in st.session_state:
+    st.session_state.selected_range = "Últimos 7 días"
+if "start_date" not in st.session_state:
+    st.session_state.start_date = (last_time - timedelta(days=7)).date()
+if "end_date" not in st.session_state:
+    st.session_state.end_date = last_time.date()
+if "filtered_data" not in st.session_state:
+    st.session_state.filtered_data = df[(df["Open Time"] >= TZ.localize(datetime.combine(st.session_state.start_date, dt_time.min))) &
+                                         (df["Open Time"] <= TZ.localize(datetime.combine(st.session_state.end_date, dt_time.max)))]
+
+# ------------------------------------------------
+# 6. Funciones auxiliares
+# ------------------------------------------------
+def get_filtered_data(start_date, end_date):
+    """Filtrar los datos según el rango seleccionado."""
+    start_dt = TZ.localize(datetime.combine(start_date, dt_time.min))
+    end_dt = TZ.localize(datetime.combine(end_date, dt_time.max))
+    return df[(df["Open Time"] >= start_dt) & (df["Open Time"] <= end_dt)]
+
+def generate_chart(filtered_data, start_date, end_date):
+    """Generar el gráfico de precios."""
+    fig = go.Figure(go.Scatter(
+        x=filtered_data["Open Time"], y=filtered_data["Close"],
+        mode="lines+markers",
+        line=dict(color="#00E5FF", width=2),
+        marker=dict(size=4)
+    ))
+    fig.update_layout(
+        title=f"BTC/USDT: {start_date} → {end_date}",
+        template="plotly_dark",
+        margin=dict(l=20, r=20, t=60, b=20),
+        xaxis_title="Fecha",
+        yaxis_title="Precio (USD)"
+    )
+    return fig
+
+# ------------------------------------------------
+# 7. Menú hamburguesa en header
 # ------------------------------------------------
 selected = option_menu(
     menu_title=None,
     options=["Inicio", "Sobre nosotros"],
     icons=["house", "info-circle"],
-    menu_icon="list",         # icono hamburguesa
+    menu_icon="list",  # Icono hamburguesa
     default_index=0,
     orientation="horizontal",
     styles={
@@ -67,7 +119,7 @@ selected = option_menu(
 )
 
 # ------------------------------------------------
-# 6. Página "Sobre nosotros"
+# 8. Página "Sobre nosotros"
 # ------------------------------------------------
 if selected == "Sobre nosotros":
     st.header("🛠️ Avauras - Sobre nosotros")
@@ -82,7 +134,7 @@ if selected == "Sobre nosotros":
     st.stop()
 
 # ------------------------------------------------
-# 7. Página "Inicio"
+# 9. Página "Inicio"
 # ------------------------------------------------
 st.header("💸 Bitcoin en tiempo real")
 st.caption("Actualización automática – datos cada minuto desde Binance")
@@ -90,7 +142,7 @@ st.caption("Actualización automática – datos cada minuto desde Binance")
 if len(df) < 30 * 24 * 60:
     st.warning("Se recomienda al menos 30 días de historial para un dashboard completo.")
 
-# 7.1 Último precio
+# 9.1 Último precio
 st.markdown(f"""
 <div style="text-align:center;font-size:48px;font-weight:bold;color:#00E5FF;">
   ${last_close:,.2f}
@@ -100,19 +152,19 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# 7.2 KPIs comparativas
+# 9.2 Comparaciones rápidas
 st.subheader("📊 Comparaciones rápidas")
-cols    = st.columns(4, gap="large")
+cols = st.columns(4, gap="large")
 periods = [("1 hora", 60), ("24 horas", 1440), ("1 semana", 10080), ("1 mes", 43200)]
 
 for i, (label, mins) in enumerate(periods):
     col = cols[i]
     if len(df) >= mins:
-        past_val  = df["Close"].iloc[-mins]
+        past_val = df["Close"].iloc[-mins]
         past_time = df["Open Time"].iloc[-mins]
-        diff      = last_close - past_val
-        pct       = diff / past_val * 100
-        color     = "red" if pct < 0 else "limegreen"
+        diff = last_close - past_val
+        pct = diff / past_val * 100
+        color = "red" if pct < 0 else "limegreen"
         col.markdown(f"""
           <div class="kpi-card">
             <div style="font-size:1rem;font-weight:bold;color:#C9D1D9;margin-bottom:0.5rem;">
@@ -128,67 +180,82 @@ for i, (label, mins) in enumerate(periods):
     else:
         col.markdown('<div class="kpi-card">--</div>', unsafe_allow_html=True)
 
-# 7.3 Tabla de estadísticas (últimos 12 meses)
+# 9.3 Tabla de estadísticas (últimos 12 meses)
 st.subheader("📈 Estadísticas clave (últimos 12 meses)")
-es_months = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
-             "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+es_months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+             "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 stats = {}
 for i in range(12):
-    m_dt  = last_time - relativedelta(months=i)
-    y, m  = m_dt.year, m_dt.month
+    m_dt = last_time - relativedelta(months=i)
+    y, m = m_dt.year, m_dt.month
     label = f"{es_months[m-1]} {y}"
     start = m_dt.replace(day=1, hour=0, minute=0, second=0)
-    end   = (start + relativedelta(months=1)) - timedelta(seconds=1)
+    end = (start + relativedelta(months=1)) - timedelta(seconds=1)
     series = df[(df["Open Time"] >= start) & (df["Open Time"] <= end)]["Close"]
     if not series.empty:
         stats[label] = {
-            "Máximo":    series.max(),
-            "Mínimo":    series.min(),
-            "Promedio":  series.mean(),
-            "Desv. est.":series.std()
+            "Máximo": series.max(),
+            "Mínimo": series.min(),
+            "Promedio": series.mean(),
+            "Desv. est.": series.std()
         }
 stats_df = pd.DataFrame(stats).T.round(2).applymap(lambda x: f"${x:,.2f}")
 st.table(stats_df)
 
-# 7.4 Selector de rango y gráfico
+# 9.4 Selector de rango y gráfico
 st.subheader("🗓 Filtrar rango de fechas")
-opt_col, date_col = st.columns([1,2], gap="small")
 
-with opt_col:
-    range_opt = st.radio("", ["Últimos 7 d","Últimos 15 d","Últimos 30 d","Personalizado"])
-days      = int(range_opt.split()[1]) if range_opt != "Personalizado" else 7
+# Botones rápidos para rangos predefinidos
+st.markdown("### Selecciona un rango rápido:")
+col1, col2, col3, col4 = st.columns(4)
 
-start_def = (last_time - timedelta(days=days)).date()
-end_def   = last_time.date()
+# Botones con lógica para actualizar el estado seleccionado
+with col1:
+    if st.button("Últimos 7 días", key="btn_7d"):
+        st.session_state.selected_range = "Últimos 7 días"
+        st.session_state.start_date = (last_time - timedelta(days=7)).date()
+        st.session_state.end_date = last_time.date()
+        st.session_state.filtered_data = get_filtered_data(st.session_state.start_date, st.session_state.end_date)
+with col2:
+    if st.button("Últimos 15 días", key="btn_15d"):
+        st.session_state.selected_range = "Últimos 15 días"
+        st.session_state.start_date = (last_time - timedelta(days=15)).date()
+        st.session_state.end_date = last_time.date()
+        st.session_state.filtered_data = get_filtered_data(st.session_state.start_date, st.session_state.end_date)
+with col3:
+    if st.button("Últimos 30 días", key="btn_30d"):
+        st.session_state.selected_range = "Últimos 30 días"
+        st.session_state.start_date = (last_time - timedelta(days=30)).date()
+        st.session_state.end_date = last_time.date()
+        st.session_state.filtered_data = get_filtered_data(st.session_state.start_date, st.session_state.end_date)
+with col4:
+    if st.button("Personalizado", key="btn_custom"):
+        st.session_state.selected_range = "Personalizado"
+        st.session_state.start_date, st.session_state.end_date = st.date_input(
+            "Selecciona un rango",
+            value=[st.session_state.start_date, st.session_state.end_date],
+            min_value=df["Open Time"].dt.date.min(),
+            max_value=last_time.date()
+        )
+        st.session_state.filtered_data = get_filtered_data(st.session_state.start_date, st.session_state.end_date)
 
-with date_col:
-    start_date, end_date = st.date_input(
-        "Selecciona un rango",
-        value=[start_def, end_def],
-        min_value=df["Open Time"].dt.date.min(),
-        max_value=last_time.date()
-    )
+# Validación del rango de fechas
+if st.session_state.start_date > st.session_state.end_date:
+    st.error("La fecha de inicio no puede ser posterior a la fecha de fin.")
+    st.stop()
 
-start_dt = TZ.localize(datetime.combine(start_date, dt_time.min))
-end_dt   = TZ.localize(datetime.combine(end_date,   dt_time.max))
-df_f     = df[(df["Open Time"] >= start_dt) & (df["Open Time"] <= end_dt)]
+# Mostrar el rango seleccionado
+st.markdown(f"### Rango seleccionado: {st.session_state.start_date} → {st.session_state.end_date}")
 
-fig = go.Figure(go.Scatter(
-    x=df_f["Open Time"], y=df_f["Close"],
-    mode="lines+markers",
-    line=dict(color="#00E5FF", width=2),
-    marker=dict(size=4)
-))
-fig.update_layout(
-    title=f"BTC/USDT: {start_date} → {end_date}",
-    template="plotly_dark",
-    margin=dict(l=20, r=20, t=60, b=20),
-    xaxis_title="Fecha",
-    yaxis_title="Precio (USD)"
-)
-st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
+# Mostrar advertencia si no hay datos
+if st.session_state.filtered_data.empty:
+    st.warning("No hay datos disponibles para el rango seleccionado.")
+else:
+    # Generar y mostrar el gráfico
+    fig = generate_chart(st.session_state.filtered_data, st.session_state.start_date, st.session_state.end_date)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
 
-# 7.5 Timestamp
+# 9.5 Timestamp
 st.markdown(f"""
 <div style="text-align:center;font-size:12px;color:gray;margin-top:1rem;">
   🕒 Última actualización: {datetime.now(TZ):%Y-%m-%d %H:%M:%S} (ARG)
