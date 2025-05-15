@@ -11,7 +11,7 @@ import pytz
 # ------------------------------------------------
 # 1. Configuración inicial
 # ------------------------------------------------
-st.set_page_config(page_title="BTC Dashboard", layout="wide")
+st.set_page_config(page_title="Crypto Dashboard", layout="wide")
 
 # ------------------------------------------------
 # 2. Inyectar CSS externo
@@ -29,10 +29,21 @@ st_autorefresh(interval=20_000, key="auto_refresh")
 TZ = pytz.timezone("America/Argentina/Buenos_Aires")
 
 # ------------------------------------------------
-# 4. Carga de datos
+# 4. Selección de moneda
 # ------------------------------------------------
-@st.cache_data(ttl=300)
-def load_data(path="btc_sample.csv"):
+st.sidebar.title("⚙️ Configuración")
+selected_symbol = st.sidebar.selectbox(
+    "Selecciona la moneda",
+    ["BTCUSDT", "ETHUSDT", "USDTARS"],
+    format_func=lambda x: {"BTCUSDT": "Bitcoin (BTC)", "ETHUSDT": "Ethereum (ETH)", "USDTARS": "USDT/ARS"}[x]
+)
+csv_file = f"{selected_symbol.lower()}_historical.csv"
+
+# ------------------------------------------------
+# 5. Carga de datos
+# ------------------------------------------------
+@st.cache_data(ttl=300, show_spinner=False)
+def load_data(path):
     try:
         df = pd.read_csv(path, parse_dates=["Open Time"])
         df["Open Time"] = pd.to_datetime(df["Open Time"], utc=True).dt.tz_convert(TZ)
@@ -44,7 +55,7 @@ def load_data(path="btc_sample.csv"):
         st.error(f"Error al cargar los datos: {e}")
         return pd.DataFrame()
 
-df = load_data()
+df = load_data(csv_file)
 if df.empty:
     st.stop()
 
@@ -52,20 +63,18 @@ last_time = df["Open Time"].iloc[-1]
 last_close = df["Close"].iloc[-1]
 
 # ------------------------------------------------
-# 5. Inicializar valores en st.session_state
+# 6. Inicializar valores en st.session_state
 # ------------------------------------------------
-if "selected_range" not in st.session_state:
+if "selected_range" not in st.session_state or "last_symbol" not in st.session_state or st.session_state.last_symbol != selected_symbol:
     st.session_state.selected_range = "Últimos 7 días"
-if "start_date" not in st.session_state:
     st.session_state.start_date = (last_time - timedelta(days=7)).date()
-if "end_date" not in st.session_state:
     st.session_state.end_date = last_time.date()
-if "filtered_data" not in st.session_state:
     st.session_state.filtered_data = df[(df["Open Time"] >= TZ.localize(datetime.combine(st.session_state.start_date, dt_time.min))) &
                                          (df["Open Time"] <= TZ.localize(datetime.combine(st.session_state.end_date, dt_time.max)))]
+    st.session_state.last_symbol = selected_symbol
 
 # ------------------------------------------------
-# 6. Funciones auxiliares
+# 7. Funciones auxiliares
 # ------------------------------------------------
 def get_filtered_data(start_date, end_date):
     """Filtrar los datos según el rango seleccionado."""
@@ -82,67 +91,24 @@ def generate_chart(filtered_data, start_date, end_date):
         marker=dict(size=4)
     ))
     fig.update_layout(
-        title=f"BTC/USDT: {start_date} → {end_date}",
+        title=f"{selected_symbol}: {start_date} → {end_date}",
         template="plotly_dark",
         margin=dict(l=20, r=20, t=60, b=20),
         xaxis_title="Fecha",
-        yaxis_title="Precio (USD)"
+        yaxis_title="Precio"
     )
     return fig
 
 # ------------------------------------------------
-# 7. Menú hamburguesa en header
+# 8. Página principal
 # ------------------------------------------------
-selected = option_menu(
-    menu_title=None,
-    options=["Inicio", "Sobre nosotros"],
-    icons=["house", "info-circle"],
-    menu_icon="list",  # Icono hamburguesa
-    default_index=0,
-    orientation="horizontal",
-    styles={
-        "container": {"padding": "0 !important", "background-color": "transparent"},
-        "nav-link": {
-            "border": "1px solid #C9D1D9",
-            "border-radius": "0.5rem",
-            "padding": "0.5rem 1rem",
-            "margin": "0 0.5rem",
-            "color": "#C9D1D9",
-            "font-size": "1rem"
-        },
-        "nav-link-selected": {
-            "background-color": "#00E5FF",
-            "color": "#0A0E1A",
-            "border": "1px solid #00E5FF"
-        }
-    }
-)
-
-# ------------------------------------------------
-# 8. Página "Sobre nosotros"
-# ------------------------------------------------
-if selected == "Sobre nosotros":
-    st.header("🛠️ Avauras - Sobre nosotros")
-    st.write("""
-        **Avauras** es una plataforma dedicada a ofrecer información en tiempo real de Bitcoin  
-        y otros servicios financieros. Nuestro equipo fusiona experiencia en datos,  
-        desarrollo de software y diseño UX para crear interfaces limpias, atractivas  
-        y fáciles de usar.
-    """)
-    st.write("---")
-    st.write("📧 contacto@avauras.com")
-    st.stop()
-
-# ------------------------------------------------
-# 9. Página "Inicio"
-# ------------------------------------------------
-st.header("💸 Bitcoin en tiempo real")
+st.header(f"💸 {selected_symbol} en tiempo real")
 st.caption("Actualización automática – datos cada minuto desde Binance")
 
 if len(df) < 30 * 24 * 60:
     st.warning("Se recomienda al menos 30 días de historial para un dashboard completo.")
 
-# 9.1 Último precio
+# 8.1 Último precio
 st.markdown(f"""
 <div style="text-align:center;font-size:48px;font-weight:bold;color:#00E5FF;">
   ${last_close:,.2f}
@@ -152,7 +118,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# 9.2 Comparaciones rápidas
+# 8.2 Comparaciones rápidas
 st.subheader("📊 Comparaciones rápidas")
 cols = st.columns(4, gap="large")
 periods = [("1 hora", 60), ("24 horas", 1440), ("1 semana", 10080), ("1 mes", 43200)]
@@ -180,10 +146,12 @@ for i, (label, mins) in enumerate(periods):
     else:
         col.markdown('<div class="kpi-card">--</div>', unsafe_allow_html=True)
 
-# 9.3 Tabla de estadísticas (últimos 12 meses)
+# 8.3 Tabla de estadísticas (últimos 12 meses)
 st.subheader("📈 Estadísticas clave (últimos 12 meses)")
+
 es_months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
              "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
 stats = {}
 for i in range(12):
     m_dt = last_time - relativedelta(months=i)
@@ -199,17 +167,16 @@ for i in range(12):
             "Promedio": series.mean(),
             "Desv. est.": series.std()
         }
+
 stats_df = pd.DataFrame(stats).T.round(2).applymap(lambda x: f"${x:,.2f}")
 st.table(stats_df)
 
-# 9.4 Selector de rango y gráfico
+# 8.4 Selector de rango y gráfico
 st.subheader("🗓 Filtrar rango de fechas")
 
-# Botones rápidos para rangos predefinidos
 st.markdown("### Selecciona un rango rápido:")
 col1, col2, col3, col4 = st.columns(4)
 
-# Botones con lógica para actualizar el estado seleccionado
 with col1:
     if st.button("Últimos 7 días", key="btn_7d"):
         st.session_state.selected_range = "Últimos 7 días"
@@ -239,23 +206,19 @@ with col4:
         )
         st.session_state.filtered_data = get_filtered_data(st.session_state.start_date, st.session_state.end_date)
 
-# Validación del rango de fechas
 if st.session_state.start_date > st.session_state.end_date:
     st.error("La fecha de inicio no puede ser posterior a la fecha de fin.")
     st.stop()
 
-# Mostrar el rango seleccionado
 st.markdown(f"### Rango seleccionado: {st.session_state.start_date} → {st.session_state.end_date}")
 
-# Mostrar advertencia si no hay datos
 if st.session_state.filtered_data.empty:
     st.warning("No hay datos disponibles para el rango seleccionado.")
 else:
-    # Generar y mostrar el gráfico
     fig = generate_chart(st.session_state.filtered_data, st.session_state.start_date, st.session_state.end_date)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": True})
 
-# 9.5 Timestamp
+# 8.5 Timestamp
 st.markdown(f"""
 <div style="text-align:center;font-size:12px;color:gray;margin-top:1rem;">
   🕒 Última actualización: {datetime.now(TZ):%Y-%m-%d %H:%M:%S} (ARG)
