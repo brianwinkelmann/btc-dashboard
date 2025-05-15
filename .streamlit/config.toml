@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#00E5FF"             # Cyan brillante para acentos
+backgroundColor = "#0A0E1A"          # Fondo casi negro con matiz azulado
+secondaryBackgroundColor = "#161B22" # Paneles oscuros
+textColor = "#C9D1D9"                # Gris claro para texto
+font = "sans serif"                  # Fuente base

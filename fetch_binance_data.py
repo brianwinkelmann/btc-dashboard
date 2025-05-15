@@ -70,12 +70,16 @@
 # df.to_csv("btc_sample.csv", index=False)
 # print("✅ Archivo btc_sample.csv generado con datos de 1 minuto x 30 días")
 
-import os, time, pandas as pd, pytz
+import os
+import time
+import pandas as pd
+import pytz
 from binance.client import Client
 from datetime import datetime, timedelta, timezone
 
 # Configuración
-api_key, api_secret = "", ""
+api_key    = os.getenv("BINANCE_API_KEY", "")
+api_secret = os.getenv("BINANCE_API_SECRET", "")
 symbol     = "BTCUSDT"
 interval   = Client.KLINE_INTERVAL_1MINUTE
 limit      = 1000
@@ -85,54 +89,69 @@ tz         = pytz.timezone("America/Argentina/Buenos_Aires")
 # Cliente Binance
 client = Client(api_key, api_secret)
 
-# Fechas UTC y local
+# Fechas UTC y local — rolling window de 5 días
 now_utc     = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-cutoff_utc  = now_utc - timedelta(days=1)
+cutoff_utc  = now_utc - timedelta(days=5)                     # ← 5 días atrás
 cutoff_local = cutoff_utc.astimezone(tz)
 
 print(f"🚀 Iniciando actualización – corte en {cutoff_local.strftime('%Y-%m-%d %H:%M')} (hora local)")
 
-# Descargar velas nuevas (últimas 24h)
+# Descargar velas nuevas (desde cutoff_utc hasta ahora)
 klines = []
 start = cutoff_utc
 while start < now_utc:
-    batch = client.get_historical_klines(symbol, interval, start.isoformat(), limit=limit)
+    try:
+        batch = client.get_historical_klines(symbol, interval, start.isoformat(), limit=limit)
+    except Exception as e:
+        print(f"⚠️ Error al descargar klines: {e}")
+        break
+
     if not batch:
         break
+
     klines += batch
+    # Usamos la última vela completa
     last_ms = batch[-1][0]
     start   = datetime.fromtimestamp(last_ms/1000, tz=timezone.utc) + timedelta(minutes=1)
     time.sleep(0.3)
+
 print(f"✅ Descargadas {len(klines)} velas nuevas")
 
-# Nuevo DataFrame
+# Crear DataFrame nuevo
 new = pd.DataFrame(klines, columns=[
     "Open Time","Open","High","Low","Close","Volume",
     "Close Time","Quote Asset Volume","Number of Trades",
     "Taker Buy Base Vol","Taker Buy Quote Vol","Ignore"
 ])[["Open Time","Open","High","Low","Close","Volume"]]
+
+# Convertir timestamp y filtrar futuros
 new["Open Time"] = pd.to_datetime(new["Open Time"], unit="ms", utc=True)
-new = new[new["Open Time"] <= pd.Timestamp.now(timezone.utc)]  # elimina futuras
+new = new[new["Open Time"] <= pd.Timestamp.now(timezone.utc)]
 new["Open Time"] = new["Open Time"].dt.tz_convert(tz)
 new[["Open","High","Low","Close","Volume"]] = new[["Open","High","Low","Close","Volume"]].apply(pd.to_numeric)
+
 print(f"🔄 Nuevo DataFrame tiene {len(new)} filas")
 
-# Leer CSV existente
+# Leer CSV existente y purgar últimos 5 días
 if os.path.exists(csv_file):
     print(f"📂 Cargando {csv_file}")
     old = pd.read_csv(csv_file, parse_dates=["Open Time"])
-    old["Open Time"] = pd.to_datetime(old["Open Time"], utc=True).dt.tz_convert(tz)
+    old["Open Time"] = (
+        pd.to_datetime(old["Open Time"], utc=True)  # forzar UTC
+          .dt.tz_convert(tz)
+    )
     print(f"📈 Datos previos antes del delete: {len(old)} filas")
-    # Borrar datos de las últimas 24h
     old = old[old["Open Time"] < cutoff_local]
     print(f"❌ Filas eliminadas; quedan {len(old)} filas antiguas")
 else:
     print("⚠️ No existe CSV; creando uno nuevo")
     old = pd.DataFrame(columns=new.columns)
 
-# Insertar nuevas filas
+# Concatenar, eliminar duplicados y ordenar
 print(f"➕ Insertando {len(new)} filas nuevas")
-out = pd.concat([old, new], ignore_index=True).sort_values("Open Time", ascending=False)
+out = pd.concat([old, new], ignore_index=True)
+out = out.drop_duplicates(subset="Open Time")
+out = out.sort_values("Open Time", ascending=False)
 
 # Guardar CSV actualizado
 out.to_csv(csv_file, index=False)
