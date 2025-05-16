@@ -8,26 +8,36 @@ html, body, [class*="css"] {
   color: #C9D1D9;
 }
 
+/* General body styling */
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #121212;
+    color: #C9D1D9;
+    margin: 0;
+    padding: 0;
+}
+
 /* Encabezados */
 h1, h2, h3, h4, h5, h6 {
   color: #00E5FF;
-  font-weight: 700;
+  font-weight: bold;
   margin-bottom: 1rem;
   text-align: center;
 }
 
 /* KPI cards hover y centrado */
 .kpi-card {
-  background: #1F2937;
-  border-radius: 0.75rem;
+  background-color: #1E1E1E;
+  border: 1px solid #333;
+  border-radius: 8px;
   padding: 1rem;
-  margin-bottom: 1rem;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
   text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .kpi-card:hover {
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 8px 14px rgba(0,0,0,0.7);
+  transform: translateY(-5px);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3);
 }
 
 /* Estadísticas clave table styling */
@@ -35,17 +45,24 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
+  background-color: #1E1E1E;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
 }
 .stTable th, .stTable td {
-  text-align: center;
+  text-align: left;
   padding: 0.75rem;
-  background-color: #1F2937;
   color: #C9D1D9;
-  border: none;
+  border-bottom: 1px solid #333;
 }
 .stTable th {
-  background-color: #111827;
-  font-weight: 500;
+  background-color: #2A2A2A;
+  color: #00E5FF;
+  font-weight: bold;
+}
+.stTable tr:hover {
+  background-color: #2A2A2A;
 }
 
 /* Nav-link hover refinement */
@@ -55,11 +72,11 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Date inputs redondeados */
 div.row-widget.stDateInput input {
-  border-radius: 0.5rem !important;
-  border: 1px solid #374151 !important;
-  background: #111827 !important;
+  border-radius: 4px !important;
+  border: 1px solid #333 !important;
+  background: #1E1E1E !important;
   color: #C9D1D9 !important;
-  padding: 0.4rem !important;
+  padding: 0.5rem !important;
 }
 
 /* Espaciado general */
@@ -102,10 +119,27 @@ div.row-widget.stDateInput input {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* Button styling */
+button {
+  background-color: #00E5FF;
+  color: #121212;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+button:hover {
+  background-color: #00B3CC;
+  transform: scale(1.05);
+}
+
 /* Footer */
 footer {
   text-align: center;
-  font-size: 12px;
-  color: gray;
-  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 2rem;
 }
